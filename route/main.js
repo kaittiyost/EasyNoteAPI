@@ -31,7 +31,7 @@ route.post("/get_customer_data", (req, res) => {
 
 route.post("/login", (req, res) => {
   let userData = req.body;
-  var sql = "SELECT * FROM customer WHERE username = ? AND password = ? ";
+  var sql = "SELECT * FROM customer WHERE username = ? AND password = md5(?) ";
   mysql.query(sql, [userData.username, userData.password], (err, result) => {
     if (result == undefined || result.length == 0) {
       res.send(JSON.stringify({ status: "fail" }));
@@ -97,9 +97,14 @@ route.post("/get_note_data", (req, res) => {
   let jwtStatus = tokenManager.checkAuthentication(req);
   if (jwtStatus != false) {
     let userData = req.body;
-    var sql =
-      "SELECT note.id,note.note_name,history_note.detail,note.time_reg,DATE_FORMAT(note.time_reg,'%d-%m-%Y') date FROM note INNER JOIN history_note ON note.id = history_note.note_id \n" +
-      "WHERE note.customer_id = ?";
+    var sql ;
+    if(!userData.tag){
+        sql = "SELECT note.id,note.note_name,history_note.detail,note.time_reg,DATE_FORMAT(note.time_reg,'%d-%m-%Y') date FROM note INNER JOIN history_note ON note.id = history_note.note_id \n" +
+        "WHERE note.customer_id = ?";
+    }else{
+        sql = "SELECT * FROM category_note,note,history_note WHERE category_note.note_id = note.id AND note.customer_id = ? AND "+
+        " history_note.note_id = note.id AND category_note.category_name = '"+userData.tag+"'";
+    }
       //LIMIT 0,4
     mysql.query(sql, [jwtStatus.user_id], (err, result) => {
       if (err) {
@@ -126,10 +131,42 @@ route.post("/get_note_data", (req, res) => {
     return false;
   }
 });
+
+route.post("/get_note_category", (req, res) => {
+    let jwtStatus = tokenManager.checkAuthentication(req);
+    if (jwtStatus != false) {
+      let userData = req.body;
+      var sql =
+      "SELECT category_note.* , count(*) c FROM category_note,note WHERE \n"+
+      "category_note.note_id = note.id AND \n"+
+      "note.customer_id = ? GROUP BY category_note.category_name";
+        //LIMIT 0,4
+      mysql.query(sql, [jwtStatus.user_id], (err, result) => {
+        if (err) {
+          //console.log(err);
+          return res.send({
+            error: false,
+            data: result,
+            message: "fail",
+          });
+        } else {
+
+          return res.send({
+            error: false,
+            data: result,
+            message: "ok",
+          });
+        }
+      });
+    } else {
+      return false;
+    }
+  });
+
 route.post("/register", (req, res) => {
   let userData = req.body;
 
-  var sql = "INSERT INTO customer SET name = ?,surname=?,username=?,password=?";
+  var sql = "INSERT INTO customer SET name = ?,surname=?,username=?,password= md5(?)";
   mysql.query(
     sql,
     [userData.name, userData.surname, userData.username, userData.password],
